@@ -40,6 +40,10 @@ inputs:
   disable-github-env-vars:
     description: 'Set to `true` if you want do disable github environment variables in codebuild'
     required: false
+  stop-on-signals:
+    description: 'Comma separated list of process signals on which to stop the build. Default is SIGINT.'
+    required: false
+    default: 'SIGINT'
 outputs:
   aws-build-id:
     description: 'The AWS CodeBuild Build ID for this build.'
