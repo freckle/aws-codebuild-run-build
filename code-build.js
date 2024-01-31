@@ -43,12 +43,30 @@ function runBuild() {
 async function build(sdk, params, config) {
   // Start the build
   const start = await sdk.codeBuild.startBuild(params).promise();
+  const buildUrl = await getBuildUrl(sdk, start.build);
+  const buildId = start.build.id;
+
+  core.setOutput("aws-build-id", buildId);
+  core.setOutput("aws-build-url", buildUrl);
+  core.info(`Build ID: ${buildId}`);
+  core.info(`Build URL: ${buildUrl}`);
 
   // Set up signal handling to stop the build on cancellation
   setupSignalHandlers(sdk, start.build.id, config.stopOnSignals);
 
   // Wait for the build to "complete"
   return waitForBuildEndTime(sdk, start.build, config);
+}
+
+async function getBuildUrl(sdk, build) {
+  try {
+    const { region } = sdk.sts.config;
+    const { Account: account } = await sdk.sts.getCallerIdentity({}).promise();
+    return `https://${region}.console.aws.amazon.com/codesuite/codebuild/${account.id}/projects/${build.projectName}/build/${build.id}/?region=${region}`;
+  } catch (ex) {
+    console.error(`Error getting Build URL: ${ex}`);
+    return "unknown";
+  }
 }
 
 function setupSignalHandlers(sdk, id, signals) {
@@ -326,18 +344,24 @@ function buildSdk() {
     customUserAgent: "aws-actions/aws-codebuild-run-build",
   });
 
+  const sts = new aws.STS({
+    customUserAgent: "aws-actions/aws-codebuild-run-build",
+  });
+
   // check if environment variable exists for the container credential provider
   if (
     !process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI &&
     !process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
   ) {
     assert(
-      codeBuild.config.credentials && cloudWatchLogs.config.credentials,
+      codeBuild.config.credentials &&
+        cloudWatchLogs.config.credentials &&
+        sts.config.credentials,
       "No credentials. Try adding @aws-actions/configure-aws-credentials earlier in your job to set up AWS credentials."
     );
   }
 
-  return { codeBuild, cloudWatchLogs };
+  return { codeBuild, cloudWatchLogs, sts };
 }
 
 function logName(Arn) {
